@@ -96,7 +96,7 @@ export function ArticleEngagement({ title }: ArticleEngagementProps) {
           aria-pressed={liked}
         >
           <span className="text-3xl leading-none" aria-hidden="true">
-            {liked ? "♥" : "♡"}
+            {liked ? "\u2665" : "\u2661"}
           </span>
           <span className="ml-0 max-w-0 whitespace-nowrap text-sm font-bold text-accent opacity-0 transition-all duration-300 group-hover/heart:ml-3 group-hover/heart:max-w-24 group-hover/heart:opacity-100 group-focus-visible/heart:ml-3 group-focus-visible/heart:max-w-24 group-focus-visible/heart:opacity-100">
             {liked ? "Liked" : "Like"}

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { Container } from "@/components/Container";
@@ -10,13 +11,6 @@ export async function SiteHeader() {
   const site = siteResult.status === "fulfilled" ? siteResult.value : null;
   const groups = groupsResult.status === "fulfilled" ? groupsResult.value : [];
   const displayName = site?.name || "Manish Kala";
-  const initials = displayName
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
 
   return (
     <header className="sticky top-0 z-40 border-b border-hairline bg-paper/90 backdrop-blur-xl">
@@ -24,10 +18,17 @@ export async function SiteHeader() {
         <div className="flex min-h-[72px] items-center justify-between gap-8">
           <Link href="/" className="group/brand inline-flex min-h-12 items-center gap-3 text-ink transition-colors hover:text-accent">
             <span
-              className="inline-flex h-10 w-10 items-center justify-center border border-ink/20 bg-linen font-serif text-sm font-semibold tracking-[0.16em] text-ink transition-colors group-hover/brand:border-accent group-hover/brand:text-accent"
+              className="inline-flex h-12 w-12 items-center justify-center overflow-hidden border border-ink/20 bg-linen transition-colors group-hover/brand:border-accent"
               aria-hidden="true"
             >
-              {initials}
+              <Image
+                src="/android-chrome-192x192.png"
+                alt=""
+                width={48}
+                height={48}
+                className="h-full w-full object-cover"
+                priority
+              />
             </span>
             <span className="font-serif text-2xl font-semibold tracking-normal">{displayName}</span>
           </Link>
