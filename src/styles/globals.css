@@ -1,0 +1,185 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #f7f2ea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(234, 216, 202, 0.55), transparent 28rem),
+    #f7f2ea;
+  color: #23211d;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+img {
+  max-width: 100%;
+}
+
+::selection {
+  background: #ead8ca;
+  color: #23211d;
+}
+
+:focus-visible {
+  outline: 2px solid #8f3f2b;
+  outline-offset: 4px;
+}
+
+.skip-link {
+  position: fixed;
+  left: 1rem;
+  top: 1rem;
+  z-index: 50;
+  transform: translateY(-160%);
+  border: 1px solid #23211d;
+  background: #f7f2ea;
+  color: #23211d;
+  padding: 0.65rem 0.9rem;
+  font-weight: 700;
+  transition: transform 160ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+@layer components {
+  .prose-editorial {
+    color: #2e2a24;
+    font-size: 1.125rem;
+    line-height: 1.85;
+  }
+
+  .prose-editorial > * + * {
+    margin-top: 1.35em;
+  }
+
+  .prose-editorial h2,
+  .prose-editorial h3,
+  .prose-editorial h4 {
+    color: #23211d;
+    font-family: var(--font-serif), Georgia, serif;
+    font-weight: 650;
+    line-height: 1.15;
+    scroll-margin-top: 7rem;
+  }
+
+  .prose-editorial h2 {
+    margin-top: 2.5em;
+    font-size: clamp(1.75rem, 2.8vw, 2.45rem);
+  }
+
+  .prose-editorial h3 {
+    margin-top: 2em;
+    font-size: clamp(1.35rem, 2.2vw, 1.75rem);
+  }
+
+  .prose-editorial h4 {
+    margin-top: 1.75em;
+    font-size: 1.2rem;
+  }
+
+  .prose-editorial p,
+  .prose-editorial li {
+    max-width: 68ch;
+  }
+
+  .prose-editorial a {
+    color: #8f3f2b;
+    text-decoration-line: underline;
+  }
+
+  .prose-editorial blockquote {
+    border-left: 3px solid #8f3f2b;
+    color: #4f473e;
+    font-family: var(--font-serif), Georgia, serif;
+    font-size: 1.35rem;
+    line-height: 1.55;
+    margin: 2.25rem 0;
+    padding-left: 1.3rem;
+  }
+
+  .prose-editorial ul,
+  .prose-editorial ol {
+    padding-left: 1.4rem;
+  }
+
+  .prose-editorial li + li {
+    margin-top: 0.5rem;
+  }
+
+  .prose-editorial figure {
+    margin: 2rem 0;
+  }
+
+  .prose-editorial figcaption,
+  .prose-editorial .wp-caption-text {
+    color: #766f65;
+    font-size: 0.92rem;
+    line-height: 1.5;
+    margin-top: 0.65rem;
+  }
+
+  .prose-editorial img {
+    border-radius: 0.35rem;
+    height: auto;
+  }
+
+  .prose-editorial pre {
+    overflow-x: auto;
+    border: 1px solid #ded2c1;
+    background: #efe5d8;
+    padding: 1rem;
+    font-size: 0.95rem;
+  }
+
+  .prose-editorial code {
+    background: #efe5d8;
+    border-radius: 0.2rem;
+    padding: 0.1rem 0.25rem;
+    font-size: 0.95em;
+  }
+
+  .prose-editorial pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  .prose-editorial table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    font-size: 0.98rem;
+  }
+
+  .prose-editorial th,
+  .prose-editorial td {
+    border: 1px solid #ded2c1;
+    padding: 0.65rem 0.8rem;
+  }
+
+  .prose-editorial th {
+    background: #efe5d8;
+    text-align: left;
+  }
+}
