@@ -138,7 +138,7 @@ export default async function AboutPage() {
       <Container className="mt-14">
         <div className="mx-auto grid max-w-4xl gap-10">
           <AboutSection number="01" title="About Me">
-            {aboutHtml ? <ArticleBody html={aboutHtml} /> : <InlineNotice>No about page content is available from WordPress.</InlineNotice>}
+            {aboutHtml ? <ArticleBody html={aboutHtml} /> : <InlineNotice>No about page content is available right now.</InlineNotice>}
           </AboutSection>
 
           <AboutSection number="02" title="Connect">
@@ -163,7 +163,7 @@ export default async function AboutPage() {
                 })}
               </ul>
             ) : (
-              <InlineNotice>Contact details are not published from WordPress yet.</InlineNotice>
+              <InlineNotice>Contact details are not published yet.</InlineNotice>
             )}
           </AboutSection>
 
@@ -171,7 +171,7 @@ export default async function AboutPage() {
             {achievementsHtml ? (
               <ArticleBody html={achievementsHtml} className="text-base" />
             ) : (
-              <InlineNotice>DRDO achievements content is not published from WordPress yet.</InlineNotice>
+              <InlineNotice>DRDO achievements content is not published Yet.</InlineNotice>
             )}
           </AboutSection>
         </div>
