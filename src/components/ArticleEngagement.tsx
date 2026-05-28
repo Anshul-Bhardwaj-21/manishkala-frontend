@@ -10,6 +10,7 @@ interface ArticleEngagementProps {
 interface LocalComment {
   id: string;
   name: string;
+  email: string;
   comment: string;
   createdAt: string;
 }
@@ -21,6 +22,7 @@ export function ArticleEngagement({ title }: ArticleEngagementProps) {
   const [currentUrl, setCurrentUrl] = useState("");
   const [comments, setComments] = useState<LocalComment[]>([]);
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [comment, setComment] = useState("");
   const [status, setStatus] = useState("");
 
@@ -60,16 +62,18 @@ export function ArticleEngagement({ title }: ArticleEngagementProps) {
   function submitComment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const cleanedName = name.trim();
+    const cleanedEmail = email.trim();
     const cleanedComment = comment.trim();
 
-    if (!cleanedName || !cleanedComment) {
-      setStatus("Please add your name and comment.");
+    if (!cleanedName || !cleanedEmail || !cleanedComment) {
+      setStatus("Please add your name, email, and comment.");
       return;
     }
 
     const nextComment: LocalComment = {
       id: `${Date.now()}`,
       name: cleanedName,
+      email: cleanedEmail,
       comment: cleanedComment,
       createdAt: new Date().toISOString()
     };
@@ -78,25 +82,35 @@ export function ArticleEngagement({ title }: ArticleEngagementProps) {
     setComments(nextComments);
     window.localStorage.setItem(`comments:${window.location.pathname}`, JSON.stringify(nextComments));
     setComment("");
+    setEmail("");
     setStatus("Comment saved in this browser.");
   }
 
   return (
-    <section id="comments" className="mt-12 border-y border-hairline bg-linen/25 px-5 py-7" aria-label="Article actions and comments">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+    <section id="comments" className="mt-10 border-y border-hairline bg-linen/25 px-5 py-8" aria-label="Article actions and comments">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <button
+          type="button"
+          onClick={toggleLike}
+          className="group/heart inline-flex min-h-14 min-w-14 items-center justify-center overflow-hidden rounded-full border border-hairline bg-paper px-4 text-accent transition-all duration-300 hover:min-w-40 hover:border-accent hover:bg-accent-soft focus-visible:min-w-40"
+          aria-pressed={liked}
+        >
+          <span className="text-3xl leading-none" aria-hidden="true">
+            {liked ? "♥" : "♡"}
+          </span>
+          <span className="ml-0 max-w-0 whitespace-nowrap text-sm font-bold text-accent opacity-0 transition-all duration-300 group-hover/heart:ml-3 group-hover/heart:max-w-24 group-hover/heart:opacity-100 group-focus-visible/heart:ml-3 group-focus-visible/heart:max-w-24 group-focus-visible/heart:opacity-100">
+            {liked ? "Liked" : "Like"}
+          </span>
+        </button>
+        <p className="text-sm font-semibold text-muted">{likeCount ? "You liked this writing." : "Tap the heart if this stayed with you."}</p>
+      </div>
+
+      <div className="mt-8 flex flex-col gap-5 border-t border-hairline pt-7 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-accent">Reader Space</p>
-          <h2 className="mt-2 font-serif text-3xl font-semibold text-ink">Respond to this writing</h2>
+          <h2 className="mt-2 font-serif text-3xl font-semibold text-ink">Leave a comment</h2>
         </div>
         <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={toggleLike}
-            className="inline-flex min-h-11 items-center border border-hairline bg-paper px-4 text-sm font-bold text-ink transition-colors hover:border-accent hover:text-accent"
-            aria-pressed={liked}
-          >
-            {liked ? "Liked" : "Like"} {likeCount ? `(${likeCount})` : null}
-          </button>
           <button
             type="button"
             onClick={copyLink}
@@ -114,7 +128,7 @@ export function ArticleEngagement({ title }: ArticleEngagementProps) {
       </div>
 
       <form id="comment-form" className="mt-7 grid gap-4 border-t border-hairline pt-6" onSubmit={submitComment}>
-        <div className="grid gap-4 sm:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="grid gap-4">
           <label className="grid gap-2 text-sm font-bold text-ink">
             Name
             <input
@@ -125,11 +139,21 @@ export function ArticleEngagement({ title }: ArticleEngagementProps) {
             />
           </label>
           <label className="grid gap-2 text-sm font-bold text-ink">
+            Email
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              className="min-h-11 border border-hairline bg-paper px-3 text-base font-semibold text-ink outline-none transition-colors focus:border-accent"
+              autoComplete="email"
+              type="email"
+            />
+          </label>
+          <label className="grid gap-2 text-sm font-bold text-ink">
             Comment
             <textarea
               value={comment}
               onChange={(event) => setComment(event.target.value)}
-              className="min-h-28 resize-y border border-hairline bg-paper px-3 py-2 text-base leading-7 text-ink outline-none transition-colors focus:border-accent"
+              className="min-h-36 resize-y border border-hairline bg-paper px-3 py-2 text-base leading-7 text-ink outline-none transition-colors focus:border-accent"
             />
           </label>
         </div>

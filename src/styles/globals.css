@@ -195,4 +195,27 @@ img {
     background: #efe5d8;
     text-align: left;
   }
+
+  .article-prose-wide {
+    font-size: clamp(1.125rem, 1.15vw, 1.28rem);
+    line-height: 1.9;
+  }
+
+  .article-prose-wide p,
+  .article-prose-wide li {
+    max-width: 88ch;
+  }
+
+  .article-prose-wide h2,
+  .article-prose-wide h3,
+  .article-prose-wide h4,
+  .article-prose-wide figure,
+  .article-prose-wide blockquote,
+  .article-prose-wide table {
+    max-width: 100%;
+  }
+
+  .article-prose-wide h2 {
+    font-size: clamp(2rem, 3.2vw, 3rem);
+  }
 }

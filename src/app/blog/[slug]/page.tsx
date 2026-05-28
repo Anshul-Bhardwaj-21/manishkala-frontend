@@ -144,18 +144,20 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   return (
     <article className="py-14 md:py-20">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd).replace(/</g, "\\u003c") }} />
-      <Container size="narrow">
-        {article.group ? <Badge>{article.group.label}</Badge> : null}
-        <h1 className="mt-5 text-balance font-serif text-5xl font-semibold leading-[1.04] text-ink md:text-6xl">{article.title}</h1>
-        {subtitle ? <p className="mt-6 text-xl leading-9 text-muted">{subtitle}</p> : null}
-        <div className="mt-7 border-y border-hairline bg-linen/25 py-4">
-          <PostMeta
-            date={article.date}
-            modified={article.modified}
-            readingTime={readingTime}
-            authorName={article.author?.name}
-            fallbackAuthorName={identity?.name}
-          />
+      <Container>
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          {article.group ? <Badge>{article.group.label}</Badge> : null}
+          <h1 className="mt-5 max-w-5xl text-balance font-serif text-5xl font-semibold leading-[1.04] text-ink md:text-7xl">{article.title}</h1>
+          {subtitle ? <p className="mt-6 max-w-4xl text-xl leading-9 text-muted">{subtitle}</p> : null}
+          <div className="mt-7 border-y border-hairline bg-linen/25 py-4">
+            <PostMeta
+              date={article.date}
+              modified={article.modified}
+              readingTime={readingTime}
+              authorName={article.author?.name}
+              fallbackAuthorName={identity?.name}
+            />
+          </div>
         </div>
       </Container>
 
@@ -177,19 +179,19 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
       ) : null}
 
       <Container className="mt-12">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <ArticleTOC headings={headings} />
           <div>
             {article.contentHtml ? (
-              <ArticleBody html={article.contentHtml} />
+              <ArticleBody html={article.contentHtml} className="article-prose-wide" />
             ) : (
               <InlineNotice>No article body was returned by WordPress.</InlineNotice>
             )}
             {referenceBlock ? <ReferencesBlock label={referenceBlock.label} references={referenceBlock.value} /> : null}
-            <ArticleEngagement title={article.title} />
             <div className="mt-12">
               <AuthorCard author={article.author} fallbackName={identity?.name} />
             </div>
+            <ArticleEngagement title={article.title} />
           </div>
         </div>
       </Container>
