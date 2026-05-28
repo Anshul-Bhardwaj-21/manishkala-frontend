@@ -170,7 +170,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
       ) : null}
 
       <Container className="mt-12">
-        <div className="grid gap-10 lg:grid-cols-[220px_minmax(0,720px)] lg:justify-center">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6">
           <ArticleTOC headings={headings} />
           <div>
             {article.contentHtml ? (
