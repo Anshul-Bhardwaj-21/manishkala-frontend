@@ -2,10 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Lora, Source_Sans_3 } from "next/font/google";
 import type { ReactNode } from "react";
 
-import { SiteFooter } from "@/components/SiteFooter";
-import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/shell/SiteFooter";
+import { SiteHeader } from "@/components/shell/SiteHeader";
 import { absoluteUrl, siteHost, siteUrl } from "@/lib/seo";
-import { getSiteIdentity } from "@/lib/wordpress";
+import { getSiteInfo } from "@/lib/wordpress";
 import "@/styles/globals.css";
 
 const serif = Lora({
@@ -21,7 +21,7 @@ const sans = Source_Sans_3({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const identity = await getSiteIdentity().catch(() => null);
+  const identity = await getSiteInfo().catch(() => null);
   const title = identity?.name ?? siteHost();
 
   return {

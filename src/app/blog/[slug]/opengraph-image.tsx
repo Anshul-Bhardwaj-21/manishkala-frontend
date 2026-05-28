@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 import { siteHost } from "@/lib/seo";
-import { getArticleBySlug, getSiteIdentity } from "@/lib/wordpress";
+import { getEssayBySlug, getSiteInfo } from "@/lib/wordpress";
 
 export const alt = "Open Graph image";
 export const size = {
@@ -19,11 +19,11 @@ interface OgImageProps {
 export default async function Image({ params }: OgImageProps) {
   const { slug } = await params;
   const [article, identity] = await Promise.all([
-    getArticleBySlug(decodeURIComponent(slug)).catch(() => null),
-    getSiteIdentity().catch(() => null)
+    getEssayBySlug(decodeURIComponent(slug)).catch(() => null),
+    getSiteInfo().catch(() => null)
   ]);
   const title = article?.title ?? identity?.name ?? siteHost();
-  const category = article?.categories[0]?.name;
+  const category = article?.group?.label;
 
   return new ImageResponse(
     (

@@ -46,6 +46,21 @@ The typed client in `src/lib/wordpress.ts` reads:
 
 If menu endpoints are unavailable, navigation is derived from backend pages and categories.
 
+## About Profile Fields
+
+The public About page is backend-driven. In WordPress, edit the `about` page and use either the page Featured Image or an ACF image field named `portrait`, `photo`, `profile_photo`, or `about_photo` for the profile photo.
+
+Optional ACF fields rendered on the About page:
+
+- `instagram_url` or `instagram_handle`
+- `phone`, `phone_number`, or `mobile`
+- `email` or `email_address`
+- `linkedin_url`
+- `website`
+- `drdo_achievements`, `career_highlights`, or `professional_highlights`
+
+DRDO achievement cards on the homepage are pulled from published WordPress content assigned to a category slug such as `drdo-achievements`, `achievements`, `professional-achievements`, or from content marked with an ACF flag like `show_in_achievements`.
+
 ## Normalized Content Model
 
 WordPress posts and legacy WordPress pages are normalized into a single article shape:

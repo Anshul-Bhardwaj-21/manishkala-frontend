@@ -1,118 +1,104 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { ApiNotice, InlineNotice } from "@/components/ApiNotice";
+import { InlineNotice } from "@/components/ApiNotice";
 import { Container } from "@/components/Container";
-import { FeaturedEssay } from "@/components/FeaturedEssay";
+import { EssayFilters } from "@/components/blog/EssayFilters";
+import { EssayGrid } from "@/components/blog/EssayGrid";
 import { Pagination } from "@/components/Pagination";
-import { PostCard } from "@/components/PostCard";
-import { TopicChip } from "@/components/TopicChip";
-import { ArticleBody } from "@/components/ArticleBody";
-import { stripHtml } from "@/lib/content";
+import { LEGACY_ESSAY_GROUPS } from "@/lib/legacyEssayGroups";
 import { metadataFromYoast } from "@/lib/seo";
-import { getCategories, getPageBySlug, getPosts, getSiteIdentity } from "@/lib/wordpress";
+import { getAllEssays, getEssaysByGroup, getPageBySlug, getSiteInfo } from "@/lib/wordpress";
 
 export const revalidate = 300;
 
 interface BlogPageProps {
   searchParams?: Promise<{
     page?: string;
-    category?: string;
+    group?: string;
   }>;
 }
+
+const perPage = 12;
 
 function parsePage(value: string | undefined): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
 }
 
+function isKnownGroup(slug: string | undefined): boolean {
+  return Boolean(slug && LEGACY_ESSAY_GROUPS.some((group) => group.slug === slug));
+}
+
 export async function generateMetadata({ searchParams }: BlogPageProps): Promise<Metadata> {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const categorySlug = resolvedSearchParams.category;
-  const [identity, page, categories] = await Promise.all([
-    getSiteIdentity().catch(() => null),
-    getPageBySlug("blog").catch(() => null),
-    getCategories().catch(() => [])
-  ]);
-  const selectedCategory = categorySlug ? categories.find((category) => category.slug === categorySlug) : undefined;
+  const activeGroup = resolvedSearchParams.group;
+  const [site, page] = await Promise.all([getSiteInfo().catch(() => null), getPageBySlug("blog").catch(() => null)]);
+  const group = activeGroup ? LEGACY_ESSAY_GROUPS.find((item) => item.slug === activeGroup) : undefined;
 
   return metadataFromYoast(
     page?.yoast_head_json,
     {
-      title: selectedCategory?.name ?? (page?.title.rendered ? stripHtml(page.title.rendered) : identity?.name),
-      description: stripHtml(page?.excerpt?.rendered ?? page?.content?.rendered ?? "") || identity?.description,
-      path: categorySlug ? `/blog?category=${encodeURIComponent(categorySlug)}` : "/blog"
+      title: group?.label ?? "Writings",
+      description: site?.description,
+      path: activeGroup ? `/blog?group=${encodeURIComponent(activeGroup)}` : "/blog"
     },
-    identity
+    site
   );
 }
 
 export default async function BlogPage({ searchParams }: BlogPageProps) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const currentPage = parsePage(resolvedSearchParams.page);
-  const categorySlug = resolvedSearchParams.category;
-  const [categoriesResult, pageResult, identityResult] = await Promise.allSettled([
-    getCategories(),
-    getPageBySlug("blog"),
-    getSiteIdentity()
-  ]);
-  const categories = categoriesResult.status === "fulfilled" ? categoriesResult.value : [];
-  const selectedCategory = categorySlug ? categories.find((category) => category.slug === categorySlug) : undefined;
-  const page = pageResult.status === "fulfilled" ? pageResult.value : null;
-  const identity = identityResult.status === "fulfilled" ? identityResult.value : null;
+  const activeGroup = resolvedSearchParams.group;
 
-  if (categorySlug && !selectedCategory) {
+  if (activeGroup && !isKnownGroup(activeGroup)) {
     notFound();
   }
 
-  const archive = await getPosts({ page: currentPage, categoryId: selectedCategory?.id }).catch(() => null);
+  const essays = activeGroup ? await getEssaysByGroup(activeGroup).catch(() => []) : await getAllEssays().catch(() => []);
+  const totalPages = Math.max(1, Math.ceil(essays.length / perPage));
 
-  if (archive && currentPage > archive.totalPages && archive.totalPages > 0) {
+  if (currentPage > totalPages && essays.length > 0) {
     notFound();
   }
 
-  const [featured, ...rest] = archive?.articles ?? [];
-  const heading = selectedCategory?.name ?? (page?.title.rendered ? stripHtml(page.title.rendered) : identity?.name);
+  const group = activeGroup ? LEGACY_ESSAY_GROUPS.find((item) => item.slug === activeGroup) : undefined;
+  const paginatedEssays = essays.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   return (
     <section className="py-16 md:py-20">
       <Container>
         <div className="border-t border-hairline pt-8">
-          {heading ? <h1 className="font-serif text-5xl font-semibold leading-[1.04] text-ink md:text-6xl">{heading}</h1> : null}
-          {page?.content.rendered ? <ArticleBody html={page.content.rendered} className="mt-7" /> : identity?.description ? <p className="mt-6 max-w-2xl text-xl leading-9 text-muted">{identity.description}</p> : null}
-          {categories.length ? (
-            <div className="mt-8 flex flex-wrap gap-3">
-              {categories.map((category) => (
-                <a key={category.id} href={`/blog?category=${encodeURIComponent(category.slug)}`}>
-                  <TopicChip label={category.name} className={selectedCategory?.id === category.id ? "border-accent text-accent" : undefined} />
-                </a>
-              ))}
+          <div className="grid gap-6 md:grid-cols-[1fr_auto] md:items-end">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">Writings</p>
+              <h1 className="mt-4 text-balance font-serif text-5xl font-semibold leading-[1.04] text-ink md:text-6xl">
+                {group?.label ?? "Writings"}
+              </h1>
             </div>
-          ) : null}
+            {essays.length ? (
+              <p className="border-l border-hairline pl-5 text-sm font-bold uppercase tracking-[0.14em] text-muted">
+                {essays.length} {essays.length === 1 ? "writing" : "writings"}
+              </p>
+            ) : null}
+          </div>
+          <div className="mt-8">
+            <EssayFilters activeGroup={activeGroup} />
+          </div>
         </div>
       </Container>
 
-      {!archive ? (
-        <ApiNotice className="mt-10" />
-      ) : (
-        <Container className="mt-12">
-          {archive.articles.length ? (
-            <>
-              {featured ? <FeaturedEssay article={featured} /> : null}
-              {rest.length ? (
-                <div className="mt-12 grid gap-9 md:grid-cols-2 lg:grid-cols-3">
-                  {rest.map((article, index) => (
-                    <PostCard key={`${article.sourceType}:${article.id}`} article={article} priority={index < 2} />
-                  ))}
-                </div>
-              ) : null}
-              <Pagination currentPage={archive.currentPage} totalPages={archive.totalPages} />
-            </>
-          ) : (
-            <InlineNotice>No published posts were returned by WordPress.</InlineNotice>
-          )}
-        </Container>
-      )}
+      <Container className="mt-12">
+        {paginatedEssays.length ? (
+          <>
+            <EssayGrid essays={paginatedEssays} />
+            <Pagination currentPage={currentPage} totalPages={totalPages} query={{ group: activeGroup }} />
+          </>
+        ) : (
+          <InlineNotice>No writings were returned by WordPress for this view.</InlineNotice>
+        )}
+      </Container>
     </section>
   );
 }

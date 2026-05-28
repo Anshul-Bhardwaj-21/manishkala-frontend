@@ -42,6 +42,11 @@ export interface FrontendImage {
   height?: number;
 }
 
+export interface EssayGroup {
+  label: string;
+  slug: string;
+}
+
 export interface FrontendArticle {
   id: number;
   sourceType: "post" | "page";
@@ -56,6 +61,7 @@ export interface FrontendArticle {
   author?: FrontendAuthor;
   featuredImage?: FrontendImage;
   categories: FrontendCategory[];
+  group?: EssayGroup;
   acf?: WPACFFields;
   yoast?: WPYoastHeadJson;
 }

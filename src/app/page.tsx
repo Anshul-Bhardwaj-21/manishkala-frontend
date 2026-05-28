@@ -1,72 +1,67 @@
 import { draftMode } from "next/headers";
 import type { Metadata } from "next";
+import Link from "next/link";
 
-import { ApiNotice, InlineNotice } from "@/components/ApiNotice";
+import { InlineNotice } from "@/components/ApiNotice";
 import { Button } from "@/components/Button";
 import { Container } from "@/components/Container";
 import { FeaturedEssay } from "@/components/FeaturedEssay";
-import { PostCard } from "@/components/PostCard";
-import { TopicChip } from "@/components/TopicChip";
-import { ArticleBody } from "@/components/ArticleBody";
+import { AchievementHighlights } from "@/components/home/AchievementHighlights";
+import { RecentEssays } from "@/components/home/RecentEssays";
+import { HomeHero } from "@/components/home/Hero";
 import { stripHtml, truncateText } from "@/lib/content";
 import { metadataFromYoast } from "@/lib/seo";
-import { getAboutPage, getCategories, getFeaturedPost, getHomePage, getPosts, getSiteIdentity } from "@/lib/wordpress";
+import {
+  getAboutPage,
+  getAchievementHighlights,
+  getFeaturedEssay,
+  getHomePage,
+  getLatestEssays,
+  getResolvedLegacyEssayGroups,
+  getSiteInfo
+} from "@/lib/wordpress";
 
 export const revalidate = 300;
 
 export async function generateMetadata(): Promise<Metadata> {
-  const [identity, page] = await Promise.all([getSiteIdentity().catch(() => null), getHomePage().catch(() => null)]);
+  const [site, page] = await Promise.all([getSiteInfo().catch(() => null), getHomePage().catch(() => null)]);
 
   return metadataFromYoast(
     page?.yoast_head_json,
     {
-      title: identity?.name ?? stripHtml(page?.title.rendered ?? ""),
-      description: stripHtml(page?.excerpt?.rendered ?? page?.content?.rendered ?? "") || identity?.description,
+      title: site?.name,
+      description: site?.description || stripHtml(page?.content?.rendered ?? ""),
       path: "/"
     },
-    identity
+    site
   );
 }
 
 export default async function HomePage() {
   const draft = await draftMode();
   const preview = draft.isEnabled;
-  const [homeResult, aboutResult, archiveResult, featuredResult, categoriesResult, identityResult] = await Promise.allSettled([
-    getHomePage({ preview }),
+  const [siteResult, aboutResult, featuredResult, recentResult, groupsResult, achievementResult] = await Promise.allSettled([
+    getSiteInfo(),
     getAboutPage({ preview }),
-    getPosts({ page: 1, perPage: 7, preview }),
-    getFeaturedPost(),
-    getCategories(),
-    getSiteIdentity()
+    getFeaturedEssay({ preview }),
+    getLatestEssays(7, { preview }),
+    getResolvedLegacyEssayGroups({ preview }),
+    getAchievementHighlights(3, { preview })
   ]);
 
-  const home = homeResult.status === "fulfilled" ? homeResult.value : null;
+  const site = siteResult.status === "fulfilled" ? siteResult.value : null;
   const about = aboutResult.status === "fulfilled" ? aboutResult.value : null;
-  const archive = archiveResult.status === "fulfilled" ? archiveResult.value : null;
-  const featured = featuredResult.status === "fulfilled" ? featuredResult.value ?? archive?.articles[0] ?? null : archive?.articles[0] ?? null;
-  const categories = categoriesResult.status === "fulfilled" ? categoriesResult.value : [];
-  const identity = identityResult.status === "fulfilled" ? identityResult.value : null;
-  const recentArticles = (archive?.articles ?? []).filter((article) => article.id !== featured?.id || article.sourceType !== featured?.sourceType).slice(0, 6);
-  const homeTitle = home?.title.rendered ? stripHtml(home.title.rendered) : identity?.name;
-  const aboutTitle = about?.title.rendered ? stripHtml(about.title.rendered) : undefined;
-  const aboutTeaser = about?.content.rendered ? truncateText(stripHtml(about.content.rendered), 320) : undefined;
+  const featured = featuredResult.status === "fulfilled" ? featuredResult.value : null;
+  const recent = recentResult.status === "fulfilled" ? recentResult.value : [];
+  const groups = groupsResult.status === "fulfilled" ? groupsResult.value : [];
+  const achievements = achievementResult.status === "fulfilled" ? achievementResult.value : [];
+  const aboutText = about?.content?.rendered ? truncateText(stripHtml(about.content.rendered), 320) : undefined;
+  const subtitle = site?.description || aboutText;
+  const recentWithoutFeatured = recent.filter((essay) => essay.slug !== featured?.slug).slice(0, 6);
 
   return (
     <>
-      <section className="py-16 md:py-24">
-        <Container>
-          {home ? (
-            <div className="max-w-3xl">
-              {homeTitle ? <h1 className="font-serif text-5xl font-semibold leading-[1.04] text-ink md:text-7xl">{homeTitle}</h1> : null}
-              {home.content.rendered ? <ArticleBody html={home.content.rendered} className="mt-8" /> : null}
-            </div>
-          ) : (
-            <InlineNotice>No homepage content is available from WordPress.</InlineNotice>
-          )}
-        </Container>
-      </section>
-
-      {homeResult.status === "rejected" || archiveResult.status === "rejected" ? <ApiNotice className="mb-16" /> : null}
+      <HomeHero title={site?.name} subtitle={subtitle} />
 
       {featured ? (
         <section className="py-8">
@@ -76,41 +71,46 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      {categories.length ? (
-        <section className="py-10">
-          <Container>
-            <div className="flex flex-wrap gap-3 border-t border-hairline pt-8">
-              {categories.map((category) => (
-                <a key={category.id} href={`/blog?category=${encodeURIComponent(category.slug)}`}>
-                  <TopicChip label={category.name} />
-                </a>
-              ))}
-            </div>
-          </Container>
-        </section>
-      ) : null}
-
-      {recentArticles.length ? (
+      {groups.length ? (
         <section className="py-12">
           <Container>
-            <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
-              {recentArticles.map((article) => (
-                <PostCard key={`${article.sourceType}:${article.id}`} article={article} />
-              ))}
+            <div className="border-y border-hairline py-8">
+              <h2 className="font-serif text-3xl font-semibold text-ink">Topics</h2>
+              <div className="mt-5 flex flex-wrap gap-3">
+                {groups.map((group) => (
+                  <Link
+                    key={group.slug}
+                    href={`/blog?group=${encodeURIComponent(group.slug)}`}
+                    className="inline-flex min-h-10 items-center border border-hairline px-3 text-sm font-bold text-muted transition-colors hover:border-accent hover:text-accent"
+                  >
+                    {group.label}
+                  </Link>
+                ))}
+              </div>
             </div>
           </Container>
         </section>
       ) : null}
 
-      {about && aboutTitle && aboutTeaser ? (
+      {recentWithoutFeatured.length ? (
+        <RecentEssays essays={recentWithoutFeatured} />
+      ) : (
+        <Container className="py-12">
+          <InlineNotice>No writings are available from WordPress yet.</InlineNotice>
+        </Container>
+      )}
+
+      <AchievementHighlights items={achievements} />
+
+      {about && aboutText ? (
         <section className="py-14">
           <Container>
             <div className="grid gap-8 border-y border-hairline py-9 lg:grid-cols-[0.65fr_1fr] lg:items-center">
-              <h2 className="font-serif text-4xl font-semibold leading-tight text-ink">{aboutTitle}</h2>
+              <h2 className="font-serif text-4xl font-semibold leading-tight text-ink">{stripHtml(about.title.rendered)}</h2>
               <div>
-                <p className="text-lg leading-8 text-muted">{aboutTeaser}</p>
+                <p className="text-lg leading-8 text-muted">{aboutText}</p>
                 <Button href="/about" variant="secondary" className="mt-7">
-                  {aboutTitle}
+                  About
                 </Button>
               </div>
             </div>

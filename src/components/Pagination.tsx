@@ -5,10 +5,24 @@ import { cn } from "@/lib/utils";
 interface PaginationProps {
   currentPage: number;
   totalPages: number;
+  query?: Record<string, string | undefined>;
 }
 
-function blogHref(page: number): string {
-  return page <= 1 ? "/blog" : `/blog?page=${page}`;
+function blogHref(page: number, query: Record<string, string | undefined> = {}): string {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(query)) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+
+  const queryString = params.toString();
+  return queryString ? `/blog?${queryString}` : "/blog";
 }
 
 function pageWindow(currentPage: number, totalPages: number): number[] {
@@ -17,15 +31,15 @@ function pageWindow(currentPage: number, totalPages: number): number[] {
   return Array.from({ length: end - start + 1 }, (_, index) => start + index);
 }
 
-export function Pagination({ currentPage, totalPages }: PaginationProps) {
+export function Pagination({ currentPage, totalPages, query }: PaginationProps) {
   if (totalPages <= 1) {
     return null;
   }
 
   return (
-    <nav aria-label="Blog pagination" className="mt-12 flex flex-col gap-4 border-t border-hairline pt-8 sm:flex-row sm:items-center sm:justify-between">
+    <nav aria-label="Writings pagination" className="mt-12 flex flex-col gap-4 border-t border-hairline pt-8 sm:flex-row sm:items-center sm:justify-between">
       <Link
-        href={blogHref(currentPage - 1)}
+        href={blogHref(currentPage - 1, query)}
         aria-disabled={currentPage <= 1}
         tabIndex={currentPage <= 1 ? -1 : undefined}
         className={cn(
@@ -39,7 +53,7 @@ export function Pagination({ currentPage, totalPages }: PaginationProps) {
         {pageWindow(currentPage, totalPages).map((page) => (
           <li key={page}>
             <Link
-              href={blogHref(page)}
+              href={blogHref(page, query)}
               aria-current={page === currentPage ? "page" : undefined}
               aria-label={`Go to page ${page}`}
               className={cn(
@@ -53,7 +67,7 @@ export function Pagination({ currentPage, totalPages }: PaginationProps) {
         ))}
       </ol>
       <Link
-        href={blogHref(currentPage + 1)}
+        href={blogHref(currentPage + 1, query)}
         aria-disabled={currentPage >= totalPages}
         tabIndex={currentPage >= totalPages ? -1 : undefined}
         className={cn(

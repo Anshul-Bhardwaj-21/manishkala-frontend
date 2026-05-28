@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { draftMode } from "next/headers";
 import { notFound } from "next/navigation";
 
-import { ArticleBody } from "@/components/ArticleBody";
+import { ArticleBody } from "@/components/blog/ArticleBody";
 import { ArticleTOC } from "@/components/ArticleTOC";
 import { AuthorCard } from "@/components/AuthorCard";
 import { Badge } from "@/components/Badge";
@@ -14,7 +14,7 @@ import { RelatedPosts } from "@/components/RelatedPosts";
 import { getAcfReferenceBlock, getAcfString } from "@/lib/acf";
 import { calculateReadingTime, extractHeadings } from "@/lib/content";
 import { absoluteUrl, metadataFromYoast } from "@/lib/seo";
-import { getAllArticleSlugs, getArticleBySlug, getRelatedPostsByCategory, getSiteIdentity } from "@/lib/wordpress";
+import { getAllArticleSlugs, getEssayBySlug, getRelatedEssays, getSiteInfo } from "@/lib/wordpress";
 import type { WPACFReference } from "@/types/wordpress";
 
 export const revalidate = 300;
@@ -33,8 +33,8 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
   const { slug } = await params;
   const [identity, article] = await Promise.all([
-    getSiteIdentity().catch(() => null),
-    getArticleBySlug(decodeURIComponent(slug)).catch(() => null)
+    getSiteInfo().catch(() => null),
+    getEssayBySlug(decodeURIComponent(slug)).catch(() => null)
   ]);
 
   if (!article) {
@@ -98,8 +98,8 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const draft = await draftMode();
   const { slug } = await params;
   const [article, identity] = await Promise.all([
-    getArticleBySlug(decodeURIComponent(slug), { preview: draft.isEnabled }).catch(() => null),
-    getSiteIdentity().catch(() => null)
+    getEssayBySlug(decodeURIComponent(slug), { preview: draft.isEnabled }).catch(() => null),
+    getSiteInfo().catch(() => null)
   ]);
 
   if (!article) {
@@ -110,10 +110,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
   const subtitle = getAcfString(article.acf, ["subtitle", "deck", "dek", "summary"]);
   const readingTime = calculateReadingTime(article.contentHtml);
   const referenceBlock = getAcfReferenceBlock(article.acf);
-  const primaryCategory = article.categories[0];
-  const relatedArticles = primaryCategory
-    ? await getRelatedPostsByCategory(primaryCategory.id, article.id).catch(() => [])
-    : [];
+  const relatedArticles = await getRelatedEssays(article).catch(() => []);
   const canonical = absoluteUrl(article.href);
   const articleJsonLd = {
     "@context": "https://schema.org",
@@ -147,23 +144,27 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
     <article className="py-14 md:py-20">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd).replace(/</g, "\\u003c") }} />
       <Container size="narrow">
-        {primaryCategory ? <Badge>{primaryCategory.name}</Badge> : null}
-        <h1 className="mt-5 font-serif text-5xl font-semibold leading-[1.04] text-ink md:text-6xl">{article.title}</h1>
+        {article.group ? <Badge>{article.group.label}</Badge> : null}
+        <h1 className="mt-5 text-balance font-serif text-5xl font-semibold leading-[1.04] text-ink md:text-6xl">{article.title}</h1>
         {subtitle ? <p className="mt-6 text-xl leading-9 text-muted">{subtitle}</p> : null}
-        <PostMeta className="mt-7" date={article.date} modified={article.modified} readingTime={readingTime} authorName={article.author?.name} />
+        <div className="mt-7 border-y border-hairline bg-linen/25 py-4">
+          <PostMeta date={article.date} modified={article.modified} readingTime={readingTime} authorName={article.author?.name} />
+        </div>
       </Container>
 
       {article.featuredImage ? (
         <Container className="mt-10" size="wide">
-          <div className="relative aspect-[16/9] overflow-hidden bg-linen">
-            <Image
-              src={article.featuredImage.url}
-              alt={article.featuredImage.alt}
-              fill
-              sizes="(min-width: 1280px) 1120px, 100vw"
-              priority
-              className="object-cover"
-            />
+          <div className="border border-hairline bg-linen p-2">
+            <div className="relative aspect-[16/9] overflow-hidden bg-paper">
+              <Image
+                src={article.featuredImage.url}
+                alt={article.featuredImage.alt}
+                fill
+                sizes="(min-width: 1280px) 1120px, 100vw"
+                priority
+                className="object-cover"
+              />
+            </div>
           </div>
         </Container>
       ) : null}

@@ -13,8 +13,8 @@ interface ButtonProps extends Omit<ComponentProps<typeof Link>, "href" | "classN
 }
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "border-ink bg-ink text-paper hover:bg-accent hover:border-accent",
-  secondary: "border-hairline bg-transparent text-ink hover:border-accent hover:text-accent",
+  primary: "border-ink bg-ink text-paper shadow-[0_10px_28px_rgba(35,33,29,0.12)] hover:bg-accent hover:border-accent",
+  secondary: "border-hairline bg-linen/45 text-ink hover:border-accent hover:text-accent",
   ghost: "border-transparent bg-transparent text-ink underline hover:text-accent"
 };
 

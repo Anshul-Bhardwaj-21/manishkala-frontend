@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 import { siteHost } from "@/lib/seo";
-import { getSiteIdentity } from "@/lib/wordpress";
+import { getSiteInfo } from "@/lib/wordpress";
 
 export const alt = "Open Graph image";
 export const size = {
@@ -11,7 +11,7 @@ export const size = {
 export const contentType = "image/png";
 
 export default async function Image() {
-  const identity = await getSiteIdentity().catch(() => null);
+  const identity = await getSiteInfo().catch(() => null);
   const title = identity?.name ?? siteHost();
   const description = identity?.description;
 

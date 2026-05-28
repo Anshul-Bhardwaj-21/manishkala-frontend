@@ -14,7 +14,7 @@ export function AuthorCard({ author }: AuthorCardProps) {
   }
 
   return (
-    <aside className="border-y border-hairline py-7">
+    <aside className="border-y border-hairline bg-linen/25 px-5 py-7">
       <div className="flex items-center gap-4">
         {author?.avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element

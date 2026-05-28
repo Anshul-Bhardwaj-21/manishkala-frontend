@@ -1,6 +1,14 @@
-import { isDefaultWordPressPlaceholder, stripHtml, truncateText } from "@/lib/content";
+import {
+  cleanWordPressHtml,
+  isDefaultWordPressPlaceholder,
+  looksLikeNavigationOnlyContent,
+  meaningfulTextLength,
+  stripHtml,
+  truncateText
+} from "@/lib/content";
+import { ACHIEVEMENT_CATEGORY_SLUGS, getLegacyGroupForSlug, LEGACY_ESSAY_GROUPS, STRUCTURAL_PAGE_SLUGS } from "@/lib/legacyEssayGroups";
 import { siteUrl } from "@/lib/seo";
-import type { ArticleArchive, FrontendArticle, FrontendCategory, FrontendImage, NavItem, SiteIdentity } from "@/types/content";
+import type { ArticleArchive, EssayGroup, FrontendArticle, FrontendCategory, FrontendImage, NavItem, SiteIdentity } from "@/types/content";
 import type {
   WPAuthor,
   WPBaseContent,
@@ -18,9 +26,15 @@ import type {
   WPYoastHeadJson
 } from "@/types/wordpress";
 
-const API_ROOT = (process.env.WORDPRESS_API_URL ?? "https://admin.manishkala.in/wp-json").replace(/\/$/, "");
+const CONFIGURED_API_URL = process.env.WORDPRESS_API_URL ?? "https://admin.manishkala.in/wp-json";
+const API_ROOT = normalizeWpJsonRoot(CONFIGURED_API_URL);
 const WORDPRESS_BASE_URL = (process.env.WORDPRESS_BASE_URL ?? "https://admin.manishkala.in").replace(/\/$/, "");
 const DEFAULT_REVALIDATE_SECONDS = 300;
+const UNCATEGORIZED_SLUG = "uncategorized";
+const PUBLIC_SITE_NAME = "Manish Kala";
+const GENERIC_WORDPRESS_SITE_NAMES = new Set(["my blog", "site title", "wordpress", "just another wordpress site"]);
+const GENERIC_WORDPRESS_DESCRIPTIONS = new Set(["just another wordpress site"]);
+const warnedDuplicateSlugs = new Set<string>();
 
 const CONTENT_FIELDS = [
   "id",
@@ -66,11 +80,10 @@ interface ContentFetchOptions {
   preview?: boolean;
 }
 
-interface GetPostsOptions {
+interface GetPostsOptions extends ContentFetchOptions {
   page?: number;
   perPage?: number;
   categoryId?: number;
-  preview?: boolean;
 }
 
 export class WordPressAPIError extends Error {
@@ -85,8 +98,13 @@ export class WordPressAPIError extends Error {
   }
 }
 
+function normalizeWpJsonRoot(value: string): string {
+  return value.replace(/\/+$/, "").replace(/\/wp\/v2$/i, "");
+}
+
 function apiUrl(path = "", params: Record<string, QueryValue> = {}): URL {
-  const url = new URL(path.replace(/^\/+/, ""), `${API_ROOT}/`);
+  const cleanedPath = path.replace(/^\/+/, "");
+  const url = cleanedPath ? new URL(cleanedPath, `${API_ROOT}/`) : new URL(API_ROOT);
 
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === "") {
@@ -97,6 +115,11 @@ function apiUrl(path = "", params: Record<string, QueryValue> = {}): URL {
   }
 
   return url;
+}
+
+function wpV2Path(path: string): string {
+  const cleanedPath = path.replace(/^\/+/, "");
+  return cleanedPath.startsWith("wp/v2/") ? cleanedPath : `wp/v2/${cleanedPath}`;
 }
 
 function getAuthorizationHeader(): string | undefined {
@@ -139,16 +162,26 @@ async function wpFetch<T>(path = "", params: Record<string, QueryValue> = {}, op
     };
   }
 
-  const response = await fetch(url, init);
+  try {
+    const response = await fetch(url, init);
 
-  if (!response.ok) {
-    throw new WordPressAPIError(`WordPress request failed with ${response.status}`, response.status, url.toString());
+    if (!response.ok) {
+      const message = `WordPress request failed with ${response.status}`;
+      console.error(`[wordpress] GET ${url.toString()} failed: ${message}`);
+      throw new WordPressAPIError(message, response.status, url.toString());
+    }
+
+    return {
+      data: (await response.json()) as T,
+      headers: response.headers
+    };
+  } catch (error) {
+    if (!(error instanceof WordPressAPIError)) {
+      console.error(`[wordpress] GET ${url.toString()} failed:`, error);
+    }
+
+    throw error;
   }
-
-  return {
-    data: (await response.json()) as T,
-    headers: response.headers
-  };
 }
 
 function contentFetchOptions(options: ContentFetchOptions = {}): FetchOptions {
@@ -173,8 +206,24 @@ function clean(value: string | undefined): string | undefined {
   return cleaned || undefined;
 }
 
-function isSamplePagePlaceholder(page: WPPage): boolean {
-  return page.slug === "sample-page" && stripHtml(page.title.rendered).trim().toLowerCase() === "sample page";
+function normalizeSiteName(value: string | undefined): string {
+  const cleaned = clean(value);
+
+  if (!cleaned || GENERIC_WORDPRESS_SITE_NAMES.has(cleaned.toLowerCase())) {
+    return PUBLIC_SITE_NAME;
+  }
+
+  return cleaned;
+}
+
+function normalizeSiteDescription(value: string | undefined): string | undefined {
+  const cleaned = clean(value);
+
+  if (!cleaned || GENERIC_WORDPRESS_DESCRIPTIONS.has(cleaned.toLowerCase())) {
+    return undefined;
+  }
+
+  return cleaned;
 }
 
 function isPlaceholderContent(content: WPBaseContent): boolean {
@@ -191,9 +240,42 @@ function getAvatar(author: WPAuthor | undefined): string | undefined {
   return largest?.[1];
 }
 
+async function fetchAllWpV2<T>(path: string, params: Record<string, QueryValue>, tags: string[], options: FetchOptions = {}): Promise<T[]> {
+  const firstPage = await wpFetch<T[]>(
+    wpV2Path(path),
+    {
+      ...params,
+      page: 1,
+      per_page: params.per_page ?? 100
+    },
+    { ...options, tags: [...tags, ...(options.tags ?? [])] }
+  );
+  const totalPages = Number(firstPage.headers.get("X-WP-TotalPages") ?? "1");
+
+  if (totalPages <= 1) {
+    return firstPage.data;
+  }
+
+  const rest = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      wpFetch<T[]>(
+        wpV2Path(path),
+        {
+          ...params,
+          page: index + 2,
+          per_page: params.per_page ?? 100
+        },
+        { ...options, tags: [...tags, ...(options.tags ?? [])] }
+      )
+    )
+  );
+
+  return [firstPage.data, ...rest.map((result) => result.data)].flat();
+}
+
 export async function getMediaById(id: number): Promise<WPMedia | null> {
   const { data } = await wpFetch<WPMedia>(
-    `wp/v2/media/${id}`,
+    wpV2Path(`media/${id}`),
     {
       _fields: "id,source_url,alt_text,media_details,title"
     },
@@ -203,16 +285,16 @@ export async function getMediaById(id: number): Promise<WPMedia | null> {
   return data ?? null;
 }
 
-export async function getSiteIdentity(): Promise<SiteIdentity> {
+export async function getSiteInfo(): Promise<SiteIdentity> {
   const { data } = await wpFetch<WPRestIndex>("", {}, { tags: ["site-identity"] });
   const identity: SiteIdentity = {
-    name: clean(data.name),
-    description: clean(data.description),
+    name: normalizeSiteName(data.name),
+    description: normalizeSiteDescription(data.description),
     url: clean(data.url),
     home: clean(data.home)
   };
 
-  if (typeof data.site_logo === "number") {
+  if (typeof data.site_logo === "number" && data.site_logo > 0) {
     const logo = await getMediaById(data.site_logo).catch(() => null);
 
     if (logo?.source_url) {
@@ -242,8 +324,10 @@ export async function getSiteIdentity(): Promise<SiteIdentity> {
   return identity;
 }
 
+export const getSiteIdentity = getSiteInfo;
+
 export async function getMenuLocations(): Promise<Array<[string, WPMenuLocation]>> {
-  const { data } = await wpFetch<WPMenuLocationsResponse>("wp/v2/menu-locations", {}, { tags: ["menus"] });
+  const { data } = await wpFetch<WPMenuLocationsResponse>(wpV2Path("menu-locations"), {}, { tags: ["menus"] });
 
   if (Array.isArray(data)) {
     return data.map((location, index) => [location.name ?? String(index), location]);
@@ -254,7 +338,7 @@ export async function getMenuLocations(): Promise<Array<[string, WPMenuLocation]
 
 export async function getMenuItems(menuId: number): Promise<WPMenuItem[]> {
   const { data } = await wpFetch<WPMenuItem[]>(
-    "wp/v2/menu-items",
+    wpV2Path("menu-items"),
     {
       menus: menuId,
       per_page: 100,
@@ -267,14 +351,14 @@ export async function getMenuItems(menuId: number): Promise<WPMenuItem[]> {
 }
 
 export async function getCategories(): Promise<FrontendCategory[]> {
-  const { data } = await wpFetch<WPCategory[]>(
-    "wp/v2/categories",
+  const data = await fetchAllWpV2<WPCategory>(
+    "categories",
     {
       per_page: 100,
       hide_empty: true,
       _fields: CATEGORY_FIELDS
     },
-    { tags: ["categories"] }
+    ["categories"]
   );
 
   return data
@@ -289,7 +373,7 @@ export async function getCategories(): Promise<FrontendCategory[]> {
 
 export async function getPageBySlug(slug: string, options: ContentFetchOptions = {}): Promise<WPPage | null> {
   const { data } = await wpFetch<WPPage[]>(
-    "wp/v2/pages",
+    wpV2Path("pages"),
     {
       slug,
       status: previewStatus(options),
@@ -300,8 +384,7 @@ export async function getPageBySlug(slug: string, options: ContentFetchOptions =
     { ...contentFetchOptions(options), tags: ["pages", `page:${slug}`] }
   );
 
-  const page = data[0] ?? null;
-  return page && !isSamplePagePlaceholder(page) ? page : null;
+  return data[0] ?? null;
 }
 
 export function getHomePage(options: ContentFetchOptions = {}): Promise<WPPage | null> {
@@ -312,49 +395,47 @@ export function getAboutPage(options: ContentFetchOptions = {}): Promise<WPPage 
   return getPageBySlug("about", options);
 }
 
-export async function getTopLevelPages(): Promise<WPPage[]> {
-  const { data } = await wpFetch<WPPage[]>(
-    "wp/v2/pages",
-    {
-      per_page: 100,
-      parent: 0,
-      orderby: "menu_order",
-      order: "asc",
-      _fields: CONTENT_FIELDS
-    },
-    { tags: ["pages"] }
-  );
-
-  return data.filter((page) => !isSamplePagePlaceholder(page));
+export function getAchievementsPage(options: ContentFetchOptions = {}): Promise<WPPage | null> {
+  return getPageBySlug("achievements", options);
 }
 
-export async function getPosts(options: GetPostsOptions = {}): Promise<ArticleArchive> {
-  const currentPage = Math.max(1, Math.floor(options.page ?? 1));
-  const { data, headers } = await wpFetch<WPPost[]>(
-    "wp/v2/posts",
+export async function getWordPressPosts(options: ContentFetchOptions = {}): Promise<WPPost[]> {
+  return fetchAllWpV2<WPPost>(
+    "posts",
     {
-      page: currentPage,
-      per_page: options.perPage ?? 12,
-      categories: options.categoryId,
       status: previewStatus(options),
       context: previewContext(options),
       _embed: true,
       _fields: CONTENT_FIELDS
     },
-    { ...contentFetchOptions(options), tags: ["posts"] }
-  );
+    ["posts"],
+    contentFetchOptions(options)
+  ).catch((error) => {
+    console.error("[wordpress] Unable to load posts.", error);
+    return [];
+  });
+}
 
-  return {
-    articles: data.map((post) => normalizePost(post)).filter((article): article is FrontendArticle => Boolean(article)),
-    totalPages: Number(headers.get("X-WP-TotalPages") ?? "1"),
-    total: Number(headers.get("X-WP-Total") ?? data.length),
-    currentPage
-  };
+export async function getWordPressPages(options: ContentFetchOptions = {}): Promise<WPPage[]> {
+  return fetchAllWpV2<WPPage>(
+    "pages",
+    {
+      status: previewStatus(options),
+      context: previewContext(options),
+      _embed: true,
+      _fields: CONTENT_FIELDS
+    },
+    ["pages"],
+    contentFetchOptions(options)
+  ).catch((error) => {
+    console.error("[wordpress] Unable to load pages.", error);
+    return [];
+  });
 }
 
 export async function getPostBySlug(slug: string, options: ContentFetchOptions = {}): Promise<WPPost | null> {
   const { data } = await wpFetch<WPPost[]>(
-    "wp/v2/posts",
+    wpV2Path("posts"),
     {
       slug,
       status: previewStatus(options),
@@ -365,158 +446,12 @@ export async function getPostBySlug(slug: string, options: ContentFetchOptions =
     { ...contentFetchOptions(options), tags: ["posts", `post:${slug}`] }
   );
 
-  const post = data[0] ?? null;
-  return post && !isPlaceholderContent(post) ? post : null;
+  return data[0] ?? null;
 }
 
-export async function getArticleBySlug(slug: string, options: ContentFetchOptions = {}): Promise<FrontendArticle | null> {
-  const post = await getPostBySlug(slug, options).catch(() => null);
-
-  if (post) {
-    return normalizePost(post);
-  }
-
-  const page = await getPageBySlug(slug, options).catch(() => null);
-  return page ? normalizePage(page) : null;
-}
-
-async function getSlugs(path: "wp/v2/posts" | "wp/v2/pages"): Promise<WPContentSlug[]> {
-  const firstPage = await wpFetch<WPContentSlug[]>(
-    path,
-    {
-      page: 1,
-      per_page: 100,
-      _fields: "slug,modified"
-    },
-    { tags: [path.endsWith("posts") ? "posts" : "pages"] }
-  );
-  const totalPages = Number(firstPage.headers.get("X-WP-TotalPages") ?? "1");
-
-  if (totalPages <= 1) {
-    return firstPage.data;
-  }
-
-  const remainingPages = await Promise.all(
-    Array.from({ length: totalPages - 1 }, (_, index) =>
-      wpFetch<WPContentSlug[]>(
-        path,
-        {
-          page: index + 2,
-          per_page: 100,
-          _fields: "slug,modified"
-        },
-        { tags: [path.endsWith("posts") ? "posts" : "pages"] }
-      )
-    )
-  );
-
-  return [firstPage.data, ...remainingPages.map((result) => result.data)].flat();
-}
-
-export async function getAllPostSlugs(): Promise<WPContentSlug[]> {
-  return getSlugs("wp/v2/posts");
-}
-
-export async function getAllArticleSlugs(): Promise<WPContentSlug[]> {
-  const [posts, pages] = await Promise.all([getSlugs("wp/v2/posts").catch(() => []), getSlugs("wp/v2/pages").catch(() => [])]);
-  const routedPageSlugs = new Set(["home", "about", "blog", "sample-page"]);
-  const seen = new Set<string>();
-  const merged: WPContentSlug[] = [];
-
-  for (const item of [...posts, ...pages.filter((page) => !routedPageSlugs.has(page.slug))]) {
-    if (!seen.has(item.slug)) {
-      seen.add(item.slug);
-      merged.push(item);
-    }
-  }
-
-  return merged;
-}
-
-export async function getRelatedPostsByCategory(categoryId: number, excludeId: number, limit = 3): Promise<FrontendArticle[]> {
-  const { data } = await wpFetch<WPPost[]>(
-    "wp/v2/posts",
-    {
-      per_page: limit,
-      categories: categoryId,
-      exclude: excludeId,
-      _embed: true,
-      _fields: CONTENT_FIELDS
-    },
-    { tags: ["posts", `category:${categoryId}`] }
-  );
-
-  return data.map((post) => normalizePost(post)).filter((article): article is FrontendArticle => Boolean(article));
-}
-
-export async function getFeaturedPost(): Promise<FrontendArticle | null> {
-  const sticky = await wpFetch<WPPost[]>(
-    "wp/v2/posts",
-    {
-      sticky: true,
-      per_page: 1,
-      _embed: true,
-      _fields: CONTENT_FIELDS
-    },
-    { tags: ["posts"] }
-  ).catch(() => null);
-
-  const stickyArticle = sticky?.data.map((post) => normalizePost(post)).find(Boolean);
-
-  if (stickyArticle) {
-    return stickyArticle;
-  }
-
-  const archive = await getPosts({ page: 1, perPage: 1 }).catch(() => null);
-  return archive?.articles[0] ?? null;
-}
-
-export async function getSeoHeadByUrl(url: string): Promise<WPYoastHeadJson | null> {
-  const yoastUrl = apiUrl("yoast/v1/get_head", { url });
-  const response = await fetch(yoastUrl, {
-    headers: {
-      Accept: "application/json"
-    },
-    next: {
-      revalidate: DEFAULT_REVALIDATE_SECONDS,
-      tags: ["wordpress", "yoast"]
-    }
-  });
-
-  if (!response.ok) {
-    return null;
-  }
-
-  const data = (await response.json()) as { json?: WPYoastHeadJson };
-  return data.json ?? null;
-}
-
-export function getFeaturedImage(content: WPBaseContent): WPFeaturedImage | null {
-  const media = content._embedded?.["wp:featuredmedia"]?.[0];
-
-  if (!media?.source_url) {
-    return null;
-  }
-
-  return {
-    url: media.source_url,
-    alt: clean(media.alt_text) ?? clean(media.title?.rendered) ?? "",
-    width: media.media_details?.width,
-    height: media.media_details?.height
-  };
-}
-
-export function getAuthor(content: WPBaseContent): WPAuthor | null {
-  return content._embedded?.author?.[0] ?? null;
-}
-
-export function getTerms(content: WPBaseContent): WPTerm[] {
-  return content._embedded?.["wp:term"]?.flat() ?? [];
-}
-
-export function getPrimaryTerm(content: WPBaseContent): WPTerm | null {
-  const terms = getTerms(content);
-  return terms.find((term) => term.taxonomy === "category") ?? terms.find((term) => term.taxonomy === "post_tag") ?? null;
+export async function getTopLevelPages(): Promise<WPPage[]> {
+  const pages = await getWordPressPages();
+  return pages.filter((page) => !STRUCTURAL_PAGE_SLUGS.has(page.slug));
 }
 
 function normalizeImage(image: WPFeaturedImage | null): FrontendImage | undefined {
@@ -545,6 +480,14 @@ function normalizeAuthor(author: WPAuthor | null): FrontendArticle["author"] {
   };
 }
 
+function getAuthor(content: WPBaseContent): WPAuthor | null {
+  return content._embedded?.author?.[0] ?? null;
+}
+
+function getTerms(content: WPBaseContent): WPTerm[] {
+  return content._embedded?.["wp:term"]?.flat() ?? [];
+}
+
 function normalizeCategories(content: WPBaseContent): FrontendCategory[] {
   return getTerms(content)
     .filter((term) => term.taxonomy === "category")
@@ -556,20 +499,69 @@ function normalizeCategories(content: WPBaseContent): FrontendCategory[] {
     }));
 }
 
-function normalizeContent(content: WPBaseContent, sourceType: "post" | "page"): FrontendArticle | null {
+function getPrimaryGroup(content: WPBaseContent): EssayGroup | undefined {
+  const legacyGroup = getLegacyGroupForSlug(content.slug);
+
+  if (legacyGroup) {
+    return {
+      label: legacyGroup.label,
+      slug: legacyGroup.slug
+    };
+  }
+
+  const category = normalizeCategories(content).find((item) => item.slug !== UNCATEGORIZED_SLUG && item.name.toLowerCase() !== "uncategorized");
+
+  if (!category) {
+    return undefined;
+  }
+
+  return {
+    label: category.name,
+    slug: category.slug
+  };
+}
+
+function getFeaturedImage(content: WPBaseContent): WPFeaturedImage | null {
+  const media = content._embedded?.["wp:featuredmedia"]?.[0];
+
+  if (!media?.source_url) {
+    return null;
+  }
+
+  return {
+    url: media.source_url,
+    alt: clean(media.alt_text) ?? clean(media.title?.rendered) ?? "",
+    width: media.media_details?.width,
+    height: media.media_details?.height
+  };
+}
+
+function isActualEssay(content: WPBaseContent, sourceType: "post" | "page"): boolean {
   if (isPlaceholderContent(content)) {
+    return false;
+  }
+
+  if (sourceType === "page" && STRUCTURAL_PAGE_SLUGS.has(content.slug)) {
+    return false;
+  }
+
+  const title = stripHtml(content.title.rendered);
+  const contentHtml = content.content?.rendered ?? "";
+  const excerptHtml = content.excerpt?.rendered ?? "";
+  const textLength = meaningfulTextLength(contentHtml) || meaningfulTextLength(excerptHtml);
+
+  return Boolean(title && textLength > 0 && !looksLikeNavigationOnlyContent(contentHtml));
+}
+
+function normalizeContent(content: WPBaseContent, sourceType: "post" | "page"): FrontendArticle | null {
+  if (!isActualEssay(content, sourceType)) {
     return null;
   }
 
   const title = stripHtml(content.title.rendered);
-
-  if (!title) {
-    return null;
-  }
-
   const excerptHtml = content.excerpt?.rendered;
-  const contentHtml = content.content?.rendered ?? "";
-  const excerptText = excerptHtml ? truncateText(stripHtml(excerptHtml), 180) : undefined;
+  const contentHtml = cleanWordPressHtml(content.content?.rendered ?? "");
+  const excerptText = excerptHtml ? truncateText(stripHtml(excerptHtml), 180) : truncateText(stripHtml(contentHtml), 180);
 
   return {
     id: content.id,
@@ -585,6 +577,7 @@ function normalizeContent(content: WPBaseContent, sourceType: "post" | "page"): 
     author: normalizeAuthor(getAuthor(content)),
     featuredImage: normalizeImage(getFeaturedImage(content)),
     categories: normalizeCategories(content),
+    group: getPrimaryGroup(content),
     acf: content.acf,
     yoast: content.yoast_head_json
   };
@@ -595,11 +588,211 @@ function normalizePost(post: WPPost): FrontendArticle | null {
 }
 
 function normalizePage(page: WPPage): FrontendArticle | null {
-  if (isSamplePagePlaceholder(page)) {
+  return normalizeContent(page, "page");
+}
+
+function articleScore(article: FrontendArticle): number {
+  const dateValue = new Date(article.modified ?? article.date ?? 0).getTime();
+  const lengthValue = meaningfulTextLength(article.contentHtml);
+  return (Number.isFinite(dateValue) ? dateValue : 0) + lengthValue;
+}
+
+function sortNewestFirst(articles: FrontendArticle[]): FrontendArticle[] {
+  return [...articles].sort((a, b) => {
+    const bDate = new Date(b.date ?? b.modified ?? 0).getTime();
+    const aDate = new Date(a.date ?? a.modified ?? 0).getTime();
+    return (Number.isFinite(bDate) ? bDate : 0) - (Number.isFinite(aDate) ? aDate : 0);
+  });
+}
+
+function dedupeEssays(articles: FrontendArticle[]): FrontendArticle[] {
+  const bySlug = new Map<string, FrontendArticle>();
+
+  for (const article of articles) {
+    const existing = bySlug.get(article.slug);
+
+    if (!existing) {
+      bySlug.set(article.slug, article);
+      continue;
+    }
+
+    const preferred = articleScore(article) > articleScore(existing) ? article : existing;
+    if (!warnedDuplicateSlugs.has(article.slug)) {
+      console.warn(`[wordpress] Duplicate essay slug "${article.slug}" found. Keeping ${preferred.sourceType}:${preferred.id}.`);
+      warnedDuplicateSlugs.add(article.slug);
+    }
+    bySlug.set(article.slug, preferred);
+  }
+
+  return Array.from(bySlug.values());
+}
+
+export async function getAllEssays(options: ContentFetchOptions = {}): Promise<FrontendArticle[]> {
+  const [postResult, pageResult] = await Promise.allSettled([getWordPressPosts(options), getWordPressPages(options)]);
+  const posts = postResult.status === "fulfilled" ? postResult.value : [];
+  const pages = pageResult.status === "fulfilled" ? pageResult.value : [];
+  const normalized = [
+    ...posts.map((post) => normalizePost(post)),
+    ...pages.map((page) => normalizePage(page))
+  ].filter((article): article is FrontendArticle => Boolean(article));
+
+  return sortNewestFirst(dedupeEssays(normalized));
+}
+
+export async function getEssayBySlug(slug: string, options: ContentFetchOptions = {}): Promise<FrontendArticle | null> {
+  const post = await getPostBySlug(slug, options).catch(() => null);
+  const postArticle = post ? normalizePost(post) : null;
+
+  if (postArticle) {
+    return postArticle;
+  }
+
+  const page = await getPageBySlug(slug, options).catch(() => null);
+  return page ? normalizePage(page) : null;
+}
+
+export const getArticleBySlug = getEssayBySlug;
+
+export async function getEssaysByGroup(groupSlug: string, options: ContentFetchOptions = {}): Promise<FrontendArticle[]> {
+  if (groupSlug === "all") {
+    return getAllEssays(options);
+  }
+
+  const group = LEGACY_ESSAY_GROUPS.find((item) => item.slug === groupSlug);
+
+  if (!group) {
+    const essays = await getAllEssays(options);
+    return essays.filter((essay) => essay.group?.slug === groupSlug);
+  }
+
+  const essays = await getAllEssays(options);
+  const bySlug = new Map(essays.map((essay) => [essay.slug, essay]));
+  return group.items.map((slug) => bySlug.get(slug)).filter((essay): essay is FrontendArticle => Boolean(essay));
+}
+
+export async function getLatestEssays(limit = 6, options: ContentFetchOptions = {}): Promise<FrontendArticle[]> {
+  const essays = await getAllEssays(options);
+  return essays.slice(0, limit);
+}
+
+export async function getFeaturedEssay(options: ContentFetchOptions = {}): Promise<FrontendArticle | null> {
+  const posts = await getWordPressPosts(options);
+  const sticky = posts.find((post) => post.sticky);
+  const stickyArticle = sticky ? normalizePost(sticky) : null;
+
+  if (stickyArticle) {
+    return stickyArticle;
+  }
+
+  const latest = await getLatestEssays(1, options);
+  return latest[0] ?? null;
+}
+
+export const getFeaturedPost = getFeaturedEssay;
+
+function hasAcfFlag(acf: FrontendArticle["acf"], keys: string[]): boolean {
+  return keys.some((key) => {
+    const value = acf?.[key];
+
+    return value === true || value === 1 || value === "1" || value === "true" || value === "yes";
+  });
+}
+
+function isAchievementArticle(article: FrontendArticle): boolean {
+  return (
+    article.categories.some((category) => ACHIEVEMENT_CATEGORY_SLUGS.has(category.slug)) ||
+    Boolean(article.group?.slug && ACHIEVEMENT_CATEGORY_SLUGS.has(article.group.slug)) ||
+    hasAcfFlag(article.acf, ["drdo_achievement", "drdo_achievements", "featured_achievement", "show_in_achievements"])
+  );
+}
+
+export async function getAchievementHighlights(limit = 3, options: ContentFetchOptions = {}): Promise<FrontendArticle[]> {
+  const essays = await getAllEssays(options);
+  return essays.filter(isAchievementArticle).slice(0, limit);
+}
+
+export async function getPosts(options: GetPostsOptions = {}): Promise<ArticleArchive> {
+  const essays = await getAllEssays(options);
+  const currentPage = Math.max(1, Math.floor(options.page ?? 1));
+  const perPage = options.perPage ?? 12;
+  const filtered = options.categoryId
+    ? essays.filter((essay) => essay.categories.some((category) => category.id === options.categoryId))
+    : essays;
+  const start = (currentPage - 1) * perPage;
+
+  return {
+    articles: filtered.slice(start, start + perPage),
+    totalPages: Math.max(1, Math.ceil(filtered.length / perPage)),
+    total: filtered.length,
+    currentPage
+  };
+}
+
+async function getSlugs(path: "posts" | "pages"): Promise<WPContentSlug[]> {
+  return fetchAllWpV2<WPContentSlug>(
+    path,
+    {
+      _fields: "slug,modified"
+    },
+    [path]
+  );
+}
+
+export async function getAllPostSlugs(): Promise<WPContentSlug[]> {
+  return getSlugs("posts").catch(() => []);
+}
+
+export async function getAllArticleSlugs(): Promise<WPContentSlug[]> {
+  const essays = await getAllEssays().catch(() => []);
+  return essays.map((essay) => ({
+    slug: essay.slug,
+    modified: essay.modified
+  }));
+}
+
+export async function getRelatedPostsByCategory(categoryId: number, excludeId: number, limit = 3): Promise<FrontendArticle[]> {
+  const essays = await getAllEssays();
+  return essays
+    .filter((essay) => essay.id !== excludeId && essay.categories.some((category) => category.id === categoryId))
+    .slice(0, limit);
+}
+
+export async function getRelatedEssays(article: FrontendArticle, limit = 3): Promise<FrontendArticle[]> {
+  const essays = article.group ? await getEssaysByGroup(article.group.slug) : await getAllEssays();
+  return essays.filter((essay) => essay.slug !== article.slug).slice(0, limit);
+}
+
+export async function getResolvedLegacyEssayGroups(options: ContentFetchOptions = {}): Promise<Array<EssayGroup & { essays: FrontendArticle[] }>> {
+  const essays = await getAllEssays(options);
+  const bySlug = new Map(essays.map((essay) => [essay.slug, essay]));
+  const groups = LEGACY_ESSAY_GROUPS.map((group) => ({
+    label: group.label,
+    slug: group.slug,
+    essays: group.items.map((slug) => bySlug.get(slug)).filter((essay): essay is FrontendArticle => Boolean(essay))
+  }));
+
+  return groups.filter((group) => group.essays.length > 0);
+}
+
+export async function getSeoHeadByUrl(url: string): Promise<WPYoastHeadJson | null> {
+  const yoastUrl = apiUrl("yoast/v1/get_head", { url });
+  const response = await fetch(yoastUrl, {
+    headers: {
+      Accept: "application/json"
+    },
+    next: {
+      revalidate: DEFAULT_REVALIDATE_SECONDS,
+      tags: ["wordpress", "yoast"]
+    }
+  });
+
+  if (!response.ok) {
+    console.error(`[wordpress] Yoast head request failed with ${response.status}: ${yoastUrl.toString()}`);
     return null;
   }
 
-  return normalizeContent(page, "page");
+  const data = (await response.json()) as { json?: WPYoastHeadJson };
+  return data.json ?? null;
 }
 
 function pageHref(page: WPPage): string {
@@ -611,8 +804,12 @@ function pageHref(page: WPPage): string {
     return "/about";
   }
 
-  if (page.slug === "blog") {
+  if (page.slug === "blog" || page.slug === "essays") {
     return "/blog";
+  }
+
+  if (page.slug === "achievements") {
+    return "/achievements";
   }
 
   return `/blog/${page.slug}`;
@@ -644,7 +841,7 @@ function normalizeLocalUrl(rawUrl: string | undefined, object?: string): string 
   const lastSegment = segments[segments.length - 1];
 
   if (object === "category" || segments[0] === "category") {
-    return lastSegment ? `/blog?category=${encodeURIComponent(lastSegment)}` : "/blog";
+    return lastSegment ? `/blog?group=${encodeURIComponent(lastSegment)}` : "/blog";
   }
 
   if (path === "/" || lastSegment === "home") {
@@ -655,8 +852,12 @@ function normalizeLocalUrl(rawUrl: string | undefined, object?: string): string 
     return "/about";
   }
 
-  if (lastSegment === "blog") {
+  if (lastSegment === "blog" || lastSegment === "essays") {
     return "/blog";
+  }
+
+  if (lastSegment === "achievements") {
+    return "/achievements";
   }
 
   return lastSegment ? `/blog/${encodeURIComponent(lastSegment)}` : "/";
@@ -709,39 +910,24 @@ async function getMenuNavigation(preferredLocations: string[]): Promise<NavItem[
     .filter((item): item is NavItem => Boolean(item));
 }
 
-async function getFallbackNavigation(): Promise<NavItem[]> {
-  const [pages, categories] = await Promise.all([getTopLevelPages().catch(() => []), getCategories().catch(() => [])]);
-  const pageItems = pages
-    .map((page) => {
-      const label = clean(stripHtml(page.title.rendered));
-
-      if (!label) {
-        return null;
-      }
-
-      return {
-        id: `page:${page.id}`,
-        label,
-        href: pageHref(page)
-      };
-    })
-    .filter((item): item is NavItem => Boolean(item));
-
-  const categoryItems = categories.map((category) => ({
-    id: `category:${category.id}`,
-    label: category.name,
-    href: `/blog?category=${encodeURIComponent(category.slug)}`
-  }));
-
-  return [...pageItems, ...categoryItems];
-}
-
 export async function getPrimaryNavigation(): Promise<NavItem[]> {
-  const menuNavigation = await getMenuNavigation(["primary", "main", "header"]).catch(() => []);
-  return menuNavigation.length ? menuNavigation : getFallbackNavigation();
+  return getMenuNavigation(["primary", "main", "header"]).catch(() => []);
 }
 
 export async function getFooterNavigation(): Promise<NavItem[]> {
   const menuNavigation = await getMenuNavigation(["footer", "secondary"]).catch(() => []);
-  return menuNavigation.length ? menuNavigation : getFallbackNavigation();
+
+  if (menuNavigation.length) {
+    return menuNavigation;
+  }
+
+  const pages = await Promise.all([getPageBySlug("home").catch(() => null), getPageBySlug("about").catch(() => null)]);
+  return pages
+    .filter((page): page is WPPage => Boolean(page))
+    .map((page) => ({
+      id: `page:${page.id}`,
+      label: stripHtml(page.title.rendered),
+      href: pageHref(page)
+    }))
+    .filter((item) => item.label);
 }

@@ -17,9 +17,8 @@ html {
 
 body {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(234, 216, 202, 0.55), transparent 28rem),
-    #f7f2ea;
+  overflow-x: hidden;
+  background: #f7f2ea;
   color: #23211d;
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   text-rendering: optimizeLegibility;
@@ -37,6 +36,10 @@ img {
 ::selection {
   background: #ead8ca;
   color: #23211d;
+}
+
+.text-balance {
+  text-wrap: balance;
 }
 
 :focus-visible {
@@ -67,6 +70,11 @@ img {
     color: #2e2a24;
     font-size: 1.125rem;
     line-height: 1.85;
+  }
+
+  .prose-editorial > p:first-child {
+    font-size: 1.22rem;
+    line-height: 1.8;
   }
 
   .prose-editorial > * + * {

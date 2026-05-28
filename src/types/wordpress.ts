@@ -37,6 +37,27 @@ export interface WPACFFields extends Record<string, WPACFValue | WPACFImage | WP
   featured_quote?: string;
   portrait?: WPACFImage | string;
   photo?: WPACFImage | string;
+  profile_photo?: WPACFImage | string;
+  about_photo?: WPACFImage | string;
+  about_me?: string;
+  profile_bio?: string;
+  biography?: string;
+  bio?: string;
+  instagram_handle?: string;
+  instagram_url?: string;
+  facebook_url?: string;
+  facebook_profile?: string;
+  facebook?: string;
+  phone?: string;
+  phone_number?: string;
+  mobile?: string;
+  email?: string;
+  email_address?: string;
+  linkedin_url?: string;
+  website?: string;
+  drdo_achievements?: string;
+  career_highlights?: string;
+  professional_highlights?: string;
 }
 
 export interface WPYoastImage {

@@ -7,9 +7,9 @@ export function ArticleTOC({ headings }: { headings: ArticleHeading[] }) {
   }
 
   return (
-    <nav aria-label="Table of contents" className="sticky top-28 hidden max-h-[calc(100vh-8rem)] overflow-y-auto pr-6 lg:block">
+    <nav aria-label="Table of contents" className="sticky top-28 hidden max-h-[calc(100vh-8rem)] overflow-y-auto border-l border-hairline bg-linen/25 p-5 lg:block">
       <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted">Contents</p>
-      <ol className="mt-4 space-y-3 border-l border-hairline pl-4 text-sm font-semibold leading-5 text-muted">
+      <ol className="mt-4 space-y-3 text-sm font-semibold leading-5 text-muted">
         {headings.map((heading) => (
           <li key={heading.id}>
             <a

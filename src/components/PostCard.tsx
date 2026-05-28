@@ -2,7 +2,6 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { PostMeta } from "@/components/PostMeta";
-import { TopicChip } from "@/components/TopicChip";
 import { calculateReadingTime } from "@/lib/content";
 import { cn } from "@/lib/utils";
 import type { FrontendArticle } from "@/types/content";
@@ -15,7 +14,6 @@ interface PostCardProps {
 
 export function PostCard({ article, className, priority = false }: PostCardProps) {
   const image = article.featuredImage;
-  const category = article.categories[0];
   const readingTime = calculateReadingTime(article.contentHtml || article.excerptHtml || "");
 
   return (
@@ -35,7 +33,7 @@ export function PostCard({ article, className, priority = false }: PostCardProps
         </Link>
       ) : null}
       <div className={image ? "mt-5" : ""}>
-        {category ? <TopicChip label={category.name} /> : null}
+        {article.group ? <p className="text-xs font-bold uppercase tracking-[0.16em] text-accent">{article.group.label}</p> : null}
         <h3 className="mt-4 font-serif text-2xl font-semibold leading-tight text-ink">
           <Link href={article.href} className="transition-colors hover:text-accent">
             {article.title}
