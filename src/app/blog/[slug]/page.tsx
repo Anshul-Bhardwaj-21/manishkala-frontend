@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { draftMode } from "next/headers";
 import { notFound } from "next/navigation";
 
+import { ArticleEngagement } from "@/components/ArticleEngagement";
 import { ArticleBody } from "@/components/blog/ArticleBody";
 import { ArticleTOC } from "@/components/ArticleTOC";
 import { AuthorCard } from "@/components/AuthorCard";
@@ -148,7 +149,13 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         <h1 className="mt-5 text-balance font-serif text-5xl font-semibold leading-[1.04] text-ink md:text-6xl">{article.title}</h1>
         {subtitle ? <p className="mt-6 text-xl leading-9 text-muted">{subtitle}</p> : null}
         <div className="mt-7 border-y border-hairline bg-linen/25 py-4">
-          <PostMeta date={article.date} modified={article.modified} readingTime={readingTime} authorName={article.author?.name} />
+          <PostMeta
+            date={article.date}
+            modified={article.modified}
+            readingTime={readingTime}
+            authorName={article.author?.name}
+            fallbackAuthorName={identity?.name}
+          />
         </div>
       </Container>
 
@@ -170,7 +177,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
       ) : null}
 
       <Container className="mt-12">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <ArticleTOC headings={headings} />
           <div>
             {article.contentHtml ? (
@@ -179,11 +186,10 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
               <InlineNotice>No article body was returned by WordPress.</InlineNotice>
             )}
             {referenceBlock ? <ReferencesBlock label={referenceBlock.label} references={referenceBlock.value} /> : null}
-            {article.author ? (
-              <div className="mt-12">
-                <AuthorCard author={article.author} />
-              </div>
-            ) : null}
+            <ArticleEngagement title={article.title} />
+            <div className="mt-12">
+              <AuthorCard author={article.author} fallbackName={identity?.name} />
+            </div>
           </div>
         </div>
       </Container>

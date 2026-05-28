@@ -1,7 +1,6 @@
 import Image from "next/image";
 import { draftMode } from "next/headers";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 
 import { ArticleBody } from "@/components/blog/ArticleBody";
 import { Container } from "@/components/Container";
@@ -9,7 +8,7 @@ import { InlineNotice } from "@/components/ApiNotice";
 import { TopicChip } from "@/components/TopicChip";
 import { getAcfImage } from "@/lib/acf";
 import { stripHtml } from "@/lib/content";
-import { getProfileAboutHtml, getProfileAchievementsHtml, getProfileContactLinks } from "@/lib/profile";
+import { getProfileAboutHtml, getProfileContactLinks } from "@/lib/profile";
 import { absoluteUrl, metadataFromYoast } from "@/lib/seo";
 import { getAboutPage, getResolvedLegacyEssayGroups, getSiteInfo } from "@/lib/wordpress";
 import type { WPPage } from "@/types/wordpress";
@@ -42,18 +41,6 @@ function getAboutPortrait(page: WPPage | null, title: string | undefined) {
   };
 }
 
-function AboutSection({ number, title, children }: { number: string; title: string; children: ReactNode }) {
-  return (
-    <section className="grid gap-5 border-t border-hairline pt-8 md:grid-cols-[140px_minmax(0,1fr)]">
-      <div>
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">{number}</p>
-        <h2 className="mt-2 font-serif text-3xl font-semibold text-ink">{title}</h2>
-      </div>
-      <div>{children}</div>
-    </section>
-  );
-}
-
 export async function generateMetadata(): Promise<Metadata> {
   const [identity, page] = await Promise.all([getSiteInfo().catch(() => null), getAboutPage().catch(() => null)]);
 
@@ -82,7 +69,6 @@ export default async function AboutPage() {
   const portrait = getAboutPortrait(page, title);
   const contactLinks = getProfileContactLinks(page?.acf);
   const aboutHtml = getProfileAboutHtml(page?.acf) ?? page?.content.rendered;
-  const achievementsHtml = getProfileAchievementsHtml(page?.acf);
   const sameAs = contactLinks.filter((link) => link.href.startsWith("http")).map((link) => link.href);
   const phone = contactLinks.find((link) => link.href.startsWith("tel:"))?.value;
   const email = contactLinks.find((link) => link.href.startsWith("mailto:"))?.value;
@@ -136,14 +122,22 @@ export default async function AboutPage() {
       </Container>
 
       <Container className="mt-14">
-        <div className="mx-auto grid max-w-4xl gap-10">
-          <AboutSection number="01" title="About Me">
-            {aboutHtml ? <ArticleBody html={aboutHtml} /> : <InlineNotice>No about page content is available right now.</InlineNotice>}
-          </AboutSection>
+        <div className="mx-auto grid max-w-4xl gap-12 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <section>
+            <div className="border-t border-hairline pt-8">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Profile</p>
+              <h2 className="mt-2 font-serif text-3xl font-semibold text-ink">About Me</h2>
+            </div>
+            <div className="mt-6">
+              {aboutHtml ? <ArticleBody html={aboutHtml} /> : <InlineNotice>No about page content is available right now.</InlineNotice>}
+            </div>
+          </section>
 
-          <AboutSection number="02" title="Connect">
+          <aside className="border-y border-hairline bg-linen/25 px-5 py-6">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent">Connect</p>
+            <h2 className="mt-2 font-serif text-3xl font-semibold text-ink">Contact</h2>
             {contactLinks.length ? (
-              <ul className="grid gap-3 sm:grid-cols-2">
+              <ul className="mt-5 grid gap-3">
                 {contactLinks.map((link) => {
                   const external = link.href.startsWith("http");
 
@@ -163,17 +157,11 @@ export default async function AboutPage() {
                 })}
               </ul>
             ) : (
-              <InlineNotice>Contact details are not published yet.</InlineNotice>
+              <div className="mt-5">
+                <InlineNotice>Contact details are not published yet.</InlineNotice>
+              </div>
             )}
-          </AboutSection>
-
-          <AboutSection number="03" title="DRDO Achievements">
-            {achievementsHtml ? (
-              <ArticleBody html={achievementsHtml} className="text-base" />
-            ) : (
-              <InlineNotice>DRDO achievements content is not published Yet.</InlineNotice>
-            )}
-          </AboutSection>
+          </aside>
         </div>
       </Container>
     </section>

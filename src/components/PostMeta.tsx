@@ -6,14 +6,16 @@ interface PostMetaProps {
   modified?: string;
   readingTime?: number;
   authorName?: string;
+  fallbackAuthorName?: string;
   className?: string;
 }
 
-export function PostMeta({ date, modified, readingTime, authorName, className }: PostMetaProps) {
+export function PostMeta({ date, modified, readingTime, authorName, fallbackAuthorName, className }: PostMetaProps) {
   const published = formatDate(date);
   const updated = isDifferentDay(date, modified) ? formatDate(modified) : "";
+  const displayAuthor = authorName?.toLowerCase() === "admin" ? fallbackAuthorName : authorName || fallbackAuthorName;
   const items = [
-    authorName,
+    displayAuthor,
     published ? <time dateTime={date}>{published}</time> : null,
     updated ? <span>Updated {updated}</span> : null,
     readingTime ? `${readingTime} min read` : null

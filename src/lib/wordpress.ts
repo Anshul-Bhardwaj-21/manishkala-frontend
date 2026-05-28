@@ -33,7 +33,7 @@ const DEFAULT_REVALIDATE_SECONDS = 300;
 const UNCATEGORIZED_SLUG = "uncategorized";
 const PUBLIC_SITE_NAME = "Manish Kala";
 const GENERIC_WORDPRESS_SITE_NAMES = new Set(["my blog", "site title", "wordpress", "just another wordpress site"]);
-const GENERIC_WORDPRESS_DESCRIPTIONS = new Set(["just another wordpress site"]);
+const GENERIC_WORDPRESS_DESCRIPTIONS = new Set(["just another wordpress site", "my wordpress blog", "my blog"]);
 const warnedDuplicateSlugs = new Set<string>();
 
 const CONTENT_FIELDS = [
@@ -472,9 +472,11 @@ function normalizeAuthor(author: WPAuthor | null): FrontendArticle["author"] {
     return undefined;
   }
 
+  const authorName = clean(author.name);
+
   return {
     id: author.id,
-    name: clean(author.name),
+    name: authorName?.toLowerCase() === "admin" ? PUBLIC_SITE_NAME : authorName,
     description: clean(author.description),
     avatarUrl: getAvatar(author)
   };

@@ -1,13 +1,14 @@
 import type { MetadataRoute } from "next";
 
 import { absoluteUrl } from "@/lib/seo";
-import { getAboutPage, getAllArticleSlugs, getHomePage } from "@/lib/wordpress";
+import { getAboutPage, getAchievementsPage, getAllArticleSlugs, getHomePage } from "@/lib/wordpress";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [articles, home, about] = await Promise.all([
+  const [articles, home, about, achievements] = await Promise.all([
     getAllArticleSlugs().catch(() => []),
     getHomePage().catch(() => null),
-    getAboutPage().catch(() => null)
+    getAboutPage().catch(() => null),
+    getAchievementsPage().catch(() => null)
   ]);
   const now = new Date();
   const staticEntries: MetadataRoute.Sitemap = [
@@ -33,6 +34,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7
     });
   }
+
+  staticEntries.push({
+    url: absoluteUrl("/achievements"),
+    lastModified: achievements?.modified ? new Date(achievements.modified) : now,
+    changeFrequency: "monthly",
+    priority: 0.75
+  });
 
   return [
     ...staticEntries,

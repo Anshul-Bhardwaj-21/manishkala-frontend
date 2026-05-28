@@ -42,6 +42,10 @@ img {
   text-wrap: balance;
 }
 
+.font-signature {
+  font-family: var(--font-signature), cursive;
+}
+
 :focus-visible {
   outline: 2px solid #8f3f2b;
   outline-offset: 4px;
@@ -70,6 +74,7 @@ img {
     color: #2e2a24;
     font-size: 1.125rem;
     line-height: 1.85;
+    width: 100%;
   }
 
   .prose-editorial > p:first-child {
@@ -108,7 +113,7 @@ img {
 
   .prose-editorial p,
   .prose-editorial li {
-    max-width: 68ch;
+    max-width: 72ch;
   }
 
   .prose-editorial a {

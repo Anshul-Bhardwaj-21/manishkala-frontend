@@ -28,6 +28,11 @@ export async function SiteFooter() {
                 </Link>
               </li>
               <li>
+                <Link href="/achievements" className="hover:text-accent">
+                  Achievements
+                </Link>
+              </li>
+              <li>
                 <Link href="/about" className="hover:text-accent">
                   About
                 </Link>

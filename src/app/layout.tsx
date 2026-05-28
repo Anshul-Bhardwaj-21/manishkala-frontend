@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Lora, Source_Sans_3 } from "next/font/google";
+import { Caveat, Lora, Source_Sans_3 } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { SiteFooter } from "@/components/shell/SiteFooter";
@@ -17,6 +17,12 @@ const serif = Lora({
 const sans = Source_Sans_3({
   subsets: ["latin"],
   variable: "--font-sans",
+  display: "swap"
+});
+
+const signature = Caveat({
+  subsets: ["latin"],
+  variable: "--font-signature",
   display: "swap"
 });
 
@@ -58,7 +64,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${serif.variable} ${sans.variable}`}>
+    <html lang="en" className={`${serif.variable} ${sans.variable} ${signature.variable}`}>
       <body>
         <a href="#main-content" className="skip-link">
           Skip to content
